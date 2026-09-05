@@ -1,0 +1,29 @@
+:root {
+  color: #16221f;
+  background: #edf3f0;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; }
+a { color: inherit; }
+
+.app-shell { min-height: 100vh; background: radial-gradient(circle at 80% 10%, #d0ebe3 0, transparent 32%), #edf3f0; }
+.app-header { display: flex; align-items: center; height: 76px; padding-inline: clamp(24px, 6vw, 88px); background: rgba(237, 243, 240, 0.88); border-bottom: 1px solid rgba(23, 107, 91, 0.12); backdrop-filter: blur(12px); }
+.brand-mark { display: grid; place-items: center; width: 38px; height: 38px; color: white; background: #176b5b; border-radius: 12px; font-size: 20px; }
+.brand-name.ant-typography { margin: 0; color: #123b33; letter-spacing: -0.04em; }
+.app-content { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
+.hero { padding: clamp(72px, 12vw, 150px) 0 clamp(48px, 8vw, 96px); max-width: 800px; }
+.hero-title.ant-typography { margin: 22px 0 20px; color: #123b33; font-size: clamp(46px, 7vw, 82px); line-height: 0.98; letter-spacing: -0.06em; }
+.hero-copy.ant-typography { max-width: 660px; color: #50645f; font-size: clamp(18px, 2.2vw, 23px); line-height: 1.55; }
+.status-grid { padding-bottom: 72px; }
+.status-grid .ant-card { height: 100%; box-shadow: 0 18px 50px rgba(26, 65, 56, 0.08); }
+.card-copy.ant-typography { margin: 22px 0 0; color: #5e6f6b; }
+.app-footer { color: #71817d; text-align: center; background: transparent; }
+
+@media (max-width: 520px) {
+  .app-header { padding-inline: 20px; }
+  .hero { padding-top: 64px; }
+}
+
