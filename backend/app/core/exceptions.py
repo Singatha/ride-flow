@@ -37,3 +37,38 @@ class InactiveUser(ApplicationError):
 class PermissionDenied(ApplicationError):
     code = "PERMISSION_DENIED"
     status_code = 403
+
+
+class DriverProfileNotFound(ApplicationError):
+    code = "DRIVER_PROFILE_NOT_FOUND"
+    status_code = 404
+
+
+class DriverProfileAlreadyExists(ApplicationError):
+    code = "DRIVER_PROFILE_ALREADY_EXISTS"
+    status_code = 409
+
+
+class DriverNotVerified(ApplicationError):
+    code = "DRIVER_NOT_VERIFIED"
+    status_code = 409
+
+
+class DriverStateConflict(ApplicationError):
+    code = "DRIVER_STATE_CONFLICT"
+    status_code = 409
+
+
+class DriverMissingRequirements(ApplicationError):
+    code = "DRIVER_MISSING_REQUIREMENTS"
+    status_code = 409
+
+
+class VehicleNotFound(ApplicationError):
+    code = "VEHICLE_NOT_FOUND"
+    status_code = 404
+
+
+class VehicleAlreadyExists(ApplicationError):
+    code = "VEHICLE_ALREADY_EXISTS"
+    status_code = 409

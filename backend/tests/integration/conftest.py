@@ -9,12 +9,22 @@ from app.main import app
 
 
 @pytest_asyncio.fixture(autouse=True, loop_scope="session")
-async def clean_auth_tables() -> AsyncIterator[None]:
+async def clean_database_tables() -> AsyncIterator[None]:
     async with engine.begin() as connection:
-        await connection.execute(text("TRUNCATE TABLE refresh_tokens, users CASCADE"))
+        await connection.execute(
+            text(
+                "TRUNCATE TABLE driver_locations, vehicles, driver_profiles, "
+                "refresh_tokens, users CASCADE"
+            )
+        )
     yield
     async with engine.begin() as connection:
-        await connection.execute(text("TRUNCATE TABLE refresh_tokens, users CASCADE"))
+        await connection.execute(
+            text(
+                "TRUNCATE TABLE driver_locations, vehicles, driver_profiles, "
+                "refresh_tokens, users CASCADE"
+            )
+        )
 
 
 @pytest_asyncio.fixture(loop_scope="session")

@@ -9,6 +9,7 @@ from app.database.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from app.domains.auth.models import RefreshToken
+    from app.domains.drivers.models import DriverProfile
 
 
 class UserRole(StrEnum):
@@ -40,4 +41,7 @@ class User(TimestampMixin, Base):
 
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
+    )
+    driver_profile: Mapped["DriverProfile | None"] = relationship(
+        back_populates="user", cascade="all, delete-orphan", uselist=False
     )

@@ -5,6 +5,7 @@ import { AppLayout } from '../components/AppLayout'
 import { ProtectedRoute } from '../components/ProtectedRoute'
 
 const HomePage = lazy(() => import('../pages/HomePage').then((module) => ({ default: module.HomePage })))
+const DriverDashboardPage = lazy(() => import('../pages/DriverDashboardPage').then((module) => ({ default: module.DriverDashboardPage })))
 const LoginPage = lazy(() => import('../pages/LoginPage').then((module) => ({ default: module.LoginPage })))
 const NotFoundPage = lazy(() => import('../pages/NotFoundPage').then((module) => ({ default: module.NotFoundPage })))
 const ProfilePage = lazy(() => import('../pages/ProfilePage').then((module) => ({ default: module.ProfilePage })))
@@ -25,6 +26,10 @@ export const router = createBrowserRouter([
       {
         element: <ProtectedRoute />,
         children: [{ path: 'profile', element: deferred(<ProfilePage />) }],
+      },
+      {
+        element: <ProtectedRoute allowedRoles={['DRIVER']} />,
+        children: [{ path: 'driver', element: deferred(<DriverDashboardPage />) }],
       },
       { path: '*', element: deferred(<NotFoundPage />) },
     ],

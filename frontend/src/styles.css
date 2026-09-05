@@ -31,10 +31,20 @@ a { color: inherit; }
 .centered-state { display: grid; min-height: 60vh; place-items: center; }
 .profile-shell { max-width: 760px; margin: 0 auto; padding: 64px 0; }
 .profile-summary { margin-bottom: 24px; }
+.driver-shell { padding: 56px 0 72px; }
+.driver-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.driver-heading .ant-typography { margin-bottom: 8px; }
+.driver-overview { margin-bottom: 20px; }
+.driver-overview .ant-card { height: 100%; }
+.driver-shell > .ant-alert, .driver-shell .ant-card .ant-alert { margin-bottom: 20px; }
+.vehicle-form-row { display: grid; grid-template-columns: 120px 1fr 1fr 160px; gap: 16px; }
+.vehicle-form-row .ant-input-number { width: 100%; }
 
 @media (max-width: 520px) {
   .app-header { padding-inline: 20px; }
   .hero { padding-top: 64px; }
   .brand-name { display: none; }
   .form-row { grid-template-columns: 1fr; gap: 0; }
+  .driver-heading { align-items: stretch; flex-direction: column; margin-bottom: 24px; }
+  .vehicle-form-row { grid-template-columns: 1fr; gap: 0; }
 }
