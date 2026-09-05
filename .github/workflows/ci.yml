@@ -11,6 +11,23 @@ permissions:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: rideflow
+          POSTGRES_USER: rideflow
+          POSTGRES_PASSWORD: rideflow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rideflow -d rideflow"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      RIDEFLOW_DATABASE_URL: postgresql+asyncpg://rideflow:rideflow@localhost:5432/rideflow
+      RIDEFLOW_JWT_SECRET: ci-only-secret-with-at-least-thirty-two-characters
     defaults:
       run:
         working-directory: backend
@@ -25,6 +42,7 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
       - run: mypy app
+      - run: alembic upgrade head
       - run: pytest
 
   frontend:
@@ -44,4 +62,3 @@ jobs:
       - run: npm run typecheck
       - run: npm run test
       - run: npm run build
-

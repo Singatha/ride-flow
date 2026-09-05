@@ -29,6 +29,9 @@ services:
       RIDEFLOW_DEBUG: ${RIDEFLOW_DEBUG:-false}
       RIDEFLOW_DATABASE_URL: ${RIDEFLOW_DATABASE_URL:-postgresql+asyncpg://rideflow:rideflow@db:5432/rideflow}
       RIDEFLOW_CORS_ORIGINS: '${RIDEFLOW_CORS_ORIGINS:-["http://localhost:5173"]}'
+      RIDEFLOW_JWT_SECRET: ${RIDEFLOW_JWT_SECRET:-local-development-secret-change-before-production}
+      RIDEFLOW_ACCESS_TOKEN_TTL_MINUTES: ${RIDEFLOW_ACCESS_TOKEN_TTL_MINUTES:-15}
+      RIDEFLOW_REFRESH_TOKEN_TTL_DAYS: ${RIDEFLOW_REFRESH_TOKEN_TTL_DAYS:-30}
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     volumes:
       - ./backend:/app

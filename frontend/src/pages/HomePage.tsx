@@ -12,7 +12,7 @@ export function HomePage() {
   return (
     <main>
       <section className="hero">
-        <Tag color="cyan" icon={<DeploymentUnitOutlined />}>Phase 1 · Foundation</Tag>
+        <Tag color="cyan" icon={<DeploymentUnitOutlined />}>Phase 2 · Authentication</Tag>
         <Title className="hero-title">Movement, thoughtfully engineered.</Title>
         <Paragraph className="hero-copy">
           RideFlow is a production-minded ride-sharing platform built one reliable domain at a time.
@@ -32,7 +32,7 @@ export function HomePage() {
                 showIcon
                 icon={<CheckCircleFilled />}
                 message="API online"
-                description="The foundation is healthy and ready for authentication in Phase 2."
+                description="Secure registration, login, token rotation, and profile management are online."
               />
             )}
             {health.isError && (

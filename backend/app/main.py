@@ -2,10 +2,13 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.core.config import Settings, get_settings
+from app.core.error_handlers import application_error_handler, request_validation_error_handler
+from app.core.exceptions import ApplicationError
 from app.database.session import engine
 
 
@@ -32,6 +35,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    application.add_exception_handler(ApplicationError, application_error_handler)
+    application.add_exception_handler(RequestValidationError, request_validation_error_handler)
     application.include_router(api_router)
     return application
 

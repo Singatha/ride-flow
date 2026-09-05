@@ -6,6 +6,7 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import get_settings
+from app.database import models as _models  # noqa: F401
 from app.database.base import Base
 
 config = context.config
@@ -17,6 +18,18 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def include_name(
+    name: str | None,
+    type_: str,
+    _parent_names: dict[str, str | None],
+) -> bool:
+    """Keep extension-owned PostGIS tables outside Alembic's ownership boundary."""
+
+    if type_ == "table":
+        return name in target_metadata.tables
+    return True
+
+
 def run_migrations_offline() -> None:
     context.configure(
         url=config.get_main_option("sqlalchemy.url"),
@@ -24,13 +37,19 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        include_name=include_name,
     )
     with context.begin_transaction():
         context.run_migrations()
 
 
 def do_run_migrations(connection: object) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        compare_type=True,
+        include_name=include_name,
+    )
     with context.begin_transaction():
         context.run_migrations()
 

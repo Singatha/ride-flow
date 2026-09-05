@@ -13,9 +13,9 @@ flowchart TB
     end
     subgraph Backend[FastAPI modular monolith]
         Routes[Thin HTTP routes]
-        Services[Application services - Phase 2+]
-        Domains[Domain rules - Phase 2+]
-        Persistence[SQLAlchemy repositories - Phase 2+]
+        Services[Application services]
+        Domains[Auth and user rules]
+        Persistence[SQLAlchemy repositories]
         Routes --> Services --> Domains
         Services --> Persistence
     end
@@ -33,7 +33,7 @@ flowchart TB
 - `frontend/src/app`: composition, providers, and routing
 - `frontend/src/pages` and `components`: presentation
 
-Domain modules will be added when their phase begins. They should contain services and rules rather than pushing behavior into route handlers.
+The `users` and `auth` domains now demonstrate the module pattern: HTTP routes parse and serialize, services own transactions, repositories own queries, and models/schemas define persistence and contracts. Later domains should follow this boundary without adding abstraction that has no concrete use.
 
 ## Runtime and health semantics
 
@@ -48,7 +48,27 @@ The API uses an async engine with connection pre-ping. Sessions are request-scop
 - Kafka arrives after core workflows work synchronously. Event envelopes, idempotent consumers, and eventually an outbox will be implemented together.
 - Metrics and tracing arrive in the observability phase after meaningful workflows exist to instrument.
 
-## Security baseline
+## Authentication flow
 
-Settings are environment-driven, CORS origins are explicit, containers contain no secrets, and `.env` is ignored. Authentication, request correlation, structured safe logging, and rate limiting are Phase 2 or later concerns and must not be treated as already present.
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant A as FastAPI
+    participant D as PostgreSQL
+    B->>A: login(email, password)
+    A->>D: load user + verify Argon2 hash
+    A->>D: store refresh-token digest
+    A-->>B: JWT access token + HttpOnly refresh cookie
+    B->>A: protected request with Bearer JWT
+    A->>D: load active user
+    A-->>B: response
+    B->>A: refresh with cookie
+    A->>D: lock, revoke old token, insert child
+    A-->>B: new access token + rotated cookie
+```
 
+The backend does not trust the JWT role claim for authorization; it reloads the active user, so deactivation and role changes take effect immediately. Public clients cannot register administrators. Production startup rejects the development JWT secret. Expected errors use a stable envelope without stack traces.
+
+The browser holds access tokens only in memory. Refresh tokens are stored in `HttpOnly`, `SameSite=Lax` cookies and as SHA-256 digests in PostgreSQL. Non-browser clients may use the refresh token from the response body.
+
+Rate limiting, structured request correlation, and security-event audit logs remain future reliability/observability work. A distributed rate limiter should arrive with Redis rather than using a misleading process-local counter.

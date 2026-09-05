@@ -13,7 +13,7 @@ migrate:
 	docker compose run --rm backend alembic upgrade head
 
 backend-test:
-	docker compose run --rm --no-deps backend pytest
+	docker compose run --rm backend sh -c "alembic upgrade head && pytest"
 
 backend-check:
 	docker compose run --rm --no-deps backend sh -c "ruff check . && ruff format --check . && mypy app"
@@ -25,4 +25,3 @@ frontend-check:
 	docker compose run --rm --no-deps frontend sh -c "npm run lint && npm run typecheck && npm run build"
 
 verify: backend-check backend-test frontend-check frontend-test
-
