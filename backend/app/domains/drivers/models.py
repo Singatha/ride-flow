@@ -23,6 +23,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
+    from app.domains.rides.models import Ride
     from app.domains.users.models import User
 
 
@@ -83,6 +84,7 @@ class DriverProfile(TimestampMixin, Base):
     location: Mapped["DriverLocation | None"] = relationship(
         back_populates="driver", cascade="all, delete-orphan", uselist=False
     )
+    rides: Mapped[list["Ride"]] = relationship(back_populates="driver")
 
 
 class Vehicle(TimestampMixin, Base):
@@ -116,6 +118,7 @@ class Vehicle(TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
 
     driver: Mapped[DriverProfile] = relationship(back_populates="vehicles")
+    rides: Mapped[list["Ride"]] = relationship(back_populates="vehicle")
 
 
 class DriverLocation(TimestampMixin, Base):

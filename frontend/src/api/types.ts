@@ -51,6 +51,74 @@ export type DriverLocation = {
   recorded_at: string
 }
 
+export type RideType = 'STANDARD' | 'PREMIUM' | 'XL'
+export type RideStatus =
+  | 'REQUESTED'
+  | 'SEARCHING'
+  | 'DRIVER_ASSIGNED'
+  | 'DRIVER_ARRIVING'
+  | 'DRIVER_ARRIVED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'CANCELLED'
+
+export type Coordinates = {
+  latitude: number
+  longitude: number
+}
+
+export type FareEstimate = {
+  ride_type: RideType
+  estimated_distance_km: string
+  estimated_duration_minutes: string
+  estimated_fare: string
+  currency: string
+  available_driver_count: number
+}
+
+export type AssignedDriver = {
+  id: string
+  first_name: string
+  last_name: string
+  phone_number: string | null
+}
+
+export type AssignedVehicle = {
+  id: string
+  make: string
+  model: string
+  color: string
+  license_plate: string
+  category: VehicleCategory
+}
+
+export type Ride = {
+  id: string
+  rider_id: string
+  driver_id: string | null
+  vehicle_id: string | null
+  driver: AssignedDriver | null
+  vehicle: AssignedVehicle | null
+  status: RideStatus
+  ride_type: RideType
+  pickup: Coordinates
+  destination: Coordinates
+  estimated_distance_km: string
+  estimated_duration_minutes: string
+  estimated_fare: string
+  final_fare: string | null
+  currency: string
+  requested_at: string
+  accepted_at: string | null
+  arriving_at: string | null
+  arrived_at: string | null
+  started_at: string | null
+  completed_at: string | null
+  cancelled_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 export type AuthSession = {
   access_token: string
   refresh_token: string

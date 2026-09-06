@@ -7,6 +7,7 @@ from app.core.config import Settings, get_settings
 from app.database.session import get_db_session
 from app.domains.auth.service import AuthService
 from app.domains.drivers.service import DriverService, VehicleService
+from app.domains.rides.service import RideService
 from app.domains.users.service import UserService
 
 
@@ -33,3 +34,9 @@ def get_vehicle_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> VehicleService:
     return VehicleService(session)
+
+
+def get_ride_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> RideService:
+    return RideService(session)

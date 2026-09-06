@@ -1,6 +1,6 @@
 # Events
 
-RideFlow does not publish events yet. Kafka is intentionally deferred until the ride lifecycle is working and there are real downstream consumers.
+RideFlow does not publish events yet. The synchronous ride lifecycle now provides event-producing operations, but Kafka remains intentionally deferred until Phase 8, after payments and notifications provide real downstream consumers.
 
 When events are introduced, the common envelope will include:
 

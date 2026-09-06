@@ -12,7 +12,7 @@ export function HomePage() {
   return (
     <main>
       <section className="hero">
-        <Tag color="cyan" icon={<DeploymentUnitOutlined />}>Phase 3 · Drivers and vehicles</Tag>
+        <Tag color="cyan" icon={<DeploymentUnitOutlined />}>Phase 4 · Ride lifecycle</Tag>
         <Title className="hero-title">Movement, thoughtfully engineered.</Title>
         <Paragraph className="hero-copy">
           RideFlow is a production-minded ride-sharing platform built one reliable domain at a time.
@@ -32,7 +32,7 @@ export function HomePage() {
                 showIcon
                 icon={<CheckCircleFilled />}
                 message="API online"
-                description="Authentication, driver onboarding, vehicle management, and PostGIS locations are online."
+                description="Ride estimates, requests, assignment, trip transitions, and history are online."
               />
             )}
             {health.isError && (

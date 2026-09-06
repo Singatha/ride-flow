@@ -13,6 +13,7 @@ from app.domains.drivers.models import (
     DriverStatus,
     DriverVerificationStatus,
     Vehicle,
+    VehicleCategory,
 )
 from app.domains.drivers.schemas import DriverLocationUpdate, NearbyDriver
 from app.domains.users.models import User
@@ -150,3 +151,28 @@ class DriverLocationRepository:
             )
             for row in result
         ]
+
+    async def count_available_nearby(
+        self,
+        latitude: float,
+        longitude: float,
+        *,
+        category: VehicleCategory,
+        radius_m: float = 5_000,
+    ) -> int:
+        pickup = func.ST_GeogFromText(f"SRID=4326;POINT({longitude} {latitude})")
+        result = await self.session.execute(
+            select(func.count(DriverProfile.id))
+            .join(DriverLocation, DriverLocation.driver_id == DriverProfile.id)
+            .join(User, User.id == DriverProfile.user_id)
+            .join(Vehicle, Vehicle.driver_id == DriverProfile.id)
+            .where(
+                DriverProfile.status == DriverStatus.AVAILABLE,
+                DriverProfile.verification_status == DriverVerificationStatus.APPROVED,
+                User.is_active.is_(True),
+                Vehicle.is_active.is_(True),
+                Vehicle.category == category,
+                func.ST_DWithin(DriverLocation.location, pickup, radius_m),
+            )
+        )
+        return int(result.scalar_one())

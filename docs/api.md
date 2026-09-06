@@ -62,6 +62,37 @@ The status operations are idempotent when the driver is already in the requested
 
 Vehicles can change only while the driver is `OFFLINE`. Activating one vehicle atomically deactivates the driver's others, and the database independently enforces at most one active vehicle per driver. Licence plates are normalized to uppercase and globally unique.
 
+## Rides
+
+### `POST /api/v1/rides/estimate`
+
+Requires `RIDER`. Accepts pickup and destination coordinates plus `STANDARD`, `PREMIUM`, or `XL`:
+
+```json
+{
+  "pickup": {"latitude": -26.2041, "longitude": 28.0473},
+  "destination": {"latitude": -26.1076, "longitude": 28.0567},
+  "ride_type": "STANDARD"
+}
+```
+
+Returns PostGIS distance, estimated duration, a database-priced fare and currency, and the compatible `AVAILABLE` driver count within 5 km. Distance is straight-line in Phase 4; a routing provider can later implement the same estimate boundary.
+
+### Ride operations
+
+- `POST /api/v1/rides` requires `RIDER`, recalculates the estimate, creates the ride, and moves it from `REQUESTED` to `SEARCHING`.
+- `GET /api/v1/rides` returns the authenticated rider's or driver's ride history.
+- `GET /api/v1/rides/{ride_id}` returns a participant's ride; administrators may inspect any ride.
+- `GET /api/v1/rides/available` requires an `AVAILABLE` driver and returns open rides compatible with their active vehicle category. This manual queue is replaced by targeted offers in Phase 5.
+- `POST /api/v1/rides/{ride_id}/accept` atomically assigns an `AVAILABLE`, compatible driver and their active vehicle, then changes their state to `RESERVED`.
+- `POST /api/v1/rides/{ride_id}/arriving` moves the assigned ride to `DRIVER_ARRIVING`.
+- `POST /api/v1/rides/{ride_id}/arrive` moves it to `DRIVER_ARRIVED`.
+- `POST /api/v1/rides/{ride_id}/start` moves it to `IN_PROGRESS` and the driver to `ON_TRIP`.
+- `POST /api/v1/rides/{ride_id}/complete` moves it to `COMPLETED`, records the Phase 4 final fare, and returns the driver to `AVAILABLE`.
+- `POST /api/v1/rides/{ride_id}/cancel` allows the owning rider to cancel before the trip starts and releases an assigned driver.
+
+Ride responses include assigned driver and vehicle details after acceptance. There is deliberately no generic status-update endpoint. Invalid or repeated transitions return `INVALID_RIDE_TRANSITION`; competing acceptance returns `RIDE_ALREADY_ACCEPTED`. One rider and one driver can each participate in at most one non-terminal ride.
+
 ## Health
 
 - `GET /health` is a dependency-free liveness probe.

@@ -72,3 +72,38 @@ class VehicleNotFound(ApplicationError):
 class VehicleAlreadyExists(ApplicationError):
     code = "VEHICLE_ALREADY_EXISTS"
     status_code = 409
+
+
+class RideNotFound(ApplicationError):
+    code = "RIDE_NOT_FOUND"
+    status_code = 404
+
+
+class PricingRuleNotFound(ApplicationError):
+    code = "PRICING_RULE_NOT_FOUND"
+    status_code = 409
+
+
+class InvalidRideTransition(ApplicationError):
+    code = "INVALID_RIDE_TRANSITION"
+    status_code = 409
+
+
+class RideAlreadyAccepted(ApplicationError):
+    code = "RIDE_ALREADY_ACCEPTED"
+    status_code = 409
+
+
+class DriverUnavailable(ApplicationError):
+    code = "DRIVER_UNAVAILABLE"
+    status_code = 409
+
+
+class ActiveRideExists(ApplicationError):
+    code = "ACTIVE_RIDE_EXISTS"
+    status_code = 409
+
+
+class RideAccessDenied(ApplicationError):
+    code = "RIDE_ACCESS_DENIED"
+    status_code = 403

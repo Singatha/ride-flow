@@ -32,6 +32,7 @@ import {
   type CreateVehicleInput,
 } from '../api/drivers'
 import type { DriverProfile } from '../api/types'
+import { DriverRidePanel } from '../components/DriverRidePanel'
 import { useAuthStore } from '../stores/authStore'
 
 function errorMessage(error: unknown) {
@@ -163,6 +164,12 @@ export function DriverDashboardPage() {
 
   const driver = profile.data
   const isOnline = driver.status !== 'OFFLINE'
+  const canToggleAvailability = driver.status === 'OFFLINE' || driver.status === 'AVAILABLE'
+  const availabilityLabel = driver.status === 'RESERVED'
+    ? 'Ride reserved'
+    : driver.status === 'ON_TRIP'
+      ? 'Trip in progress'
+      : `Go ${isOnline ? 'offline' : 'online'}`
   const verificationColour = driver.verification_status === 'APPROVED' ? 'green' : driver.verification_status === 'PENDING' ? 'gold' : 'red'
 
   return (
@@ -179,9 +186,10 @@ export function DriverDashboardPage() {
           size="large"
           icon={<PoweroffOutlined />}
           loading={availability.isPending}
+          disabled={!canToggleAvailability}
           onClick={() => availability.mutate(!isOnline)}
         >
-          Go {isOnline ? 'offline' : 'online'}
+          {availabilityLabel}
         </Button>
       </div>
       {availability.isError && <Alert type="error" showIcon message={errorMessage(availability.error)} />}
@@ -207,6 +215,7 @@ export function DriverDashboardPage() {
           </Card>
         </Col>
       </Row>
+      <DriverRidePanel accessToken={accessToken} profile={driver} />
       <VehiclePanel accessToken={accessToken} profile={driver} />
     </section>
   )

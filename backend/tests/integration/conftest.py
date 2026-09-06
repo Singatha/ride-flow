@@ -13,7 +13,7 @@ async def clean_database_tables() -> AsyncIterator[None]:
     async with engine.begin() as connection:
         await connection.execute(
             text(
-                "TRUNCATE TABLE driver_locations, vehicles, driver_profiles, "
+                "TRUNCATE TABLE rides, driver_locations, vehicles, driver_profiles, "
                 "refresh_tokens, users CASCADE"
             )
         )
@@ -21,7 +21,7 @@ async def clean_database_tables() -> AsyncIterator[None]:
     async with engine.begin() as connection:
         await connection.execute(
             text(
-                "TRUNCATE TABLE driver_locations, vehicles, driver_profiles, "
+                "TRUNCATE TABLE rides, driver_locations, vehicles, driver_profiles, "
                 "refresh_tokens, users CASCADE"
             )
         )

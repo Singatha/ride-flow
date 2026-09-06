@@ -39,6 +39,14 @@ a { color: inherit; }
 .driver-shell > .ant-alert, .driver-shell .ant-card .ant-alert { margin-bottom: 20px; }
 .vehicle-form-row { display: grid; grid-template-columns: 120px 1fr 1fr 160px; gap: 16px; }
 .vehicle-form-row .ant-input-number { width: 100%; }
+.ride-shell { padding: 56px 0 72px; }
+.ride-shell > .ant-typography { margin-bottom: 8px; }
+.ride-shell .ant-alert { margin-bottom: 20px; }
+.coordinate-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.coordinate-row .ant-input-number { width: 100%; }
+.ride-history-card { margin-top: 20px; }
+.driver-rides { display: grid; gap: 20px; margin-bottom: 20px; }
+.driver-rides .ant-descriptions { margin-bottom: 16px; }
 
 @media (max-width: 520px) {
   .app-header { padding-inline: 20px; }
@@ -47,4 +55,5 @@ a { color: inherit; }
   .form-row { grid-template-columns: 1fr; gap: 0; }
   .driver-heading { align-items: stretch; flex-direction: column; margin-bottom: 24px; }
   .vehicle-form-row { grid-template-columns: 1fr; gap: 0; }
+  .coordinate-row { grid-template-columns: 1fr; gap: 0; }
 }

@@ -10,6 +10,7 @@ const LoginPage = lazy(() => import('../pages/LoginPage').then((module) => ({ de
 const NotFoundPage = lazy(() => import('../pages/NotFoundPage').then((module) => ({ default: module.NotFoundPage })))
 const ProfilePage = lazy(() => import('../pages/ProfilePage').then((module) => ({ default: module.ProfilePage })))
 const RegisterPage = lazy(() => import('../pages/RegisterPage').then((module) => ({ default: module.RegisterPage })))
+const RiderDashboardPage = lazy(() => import('../pages/RiderDashboardPage').then((module) => ({ default: module.RiderDashboardPage })))
 
 function deferred(element: ReactNode) {
   return <Suspense fallback={null}>{element}</Suspense>
@@ -30,6 +31,10 @@ export const router = createBrowserRouter([
       {
         element: <ProtectedRoute allowedRoles={['DRIVER']} />,
         children: [{ path: 'driver', element: deferred(<DriverDashboardPage />) }],
+      },
+      {
+        element: <ProtectedRoute allowedRoles={['RIDER']} />,
+        children: [{ path: 'rider', element: deferred(<RiderDashboardPage />) }],
       },
       { path: '*', element: deferred(<NotFoundPage />) },
     ],

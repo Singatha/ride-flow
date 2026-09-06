@@ -10,6 +10,7 @@ from app.database.base import Base, TimestampMixin
 if TYPE_CHECKING:
     from app.domains.auth.models import RefreshToken
     from app.domains.drivers.models import DriverProfile
+    from app.domains.rides.models import Ride
 
 
 class UserRole(StrEnum):
@@ -45,3 +46,4 @@ class User(TimestampMixin, Base):
     driver_profile: Mapped["DriverProfile | None"] = relationship(
         back_populates="user", cascade="all, delete-orphan", uselist=False
     )
+    rides_as_rider: Mapped[list["Ride"]] = relationship(back_populates="rider")

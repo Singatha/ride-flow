@@ -14,7 +14,7 @@ flowchart TB
     subgraph Backend[FastAPI modular monolith]
         Routes[Thin HTTP routes]
         Services[Application services]
-        Domains[Auth, user, and driver rules]
+        Domains[Auth, user, driver, and ride rules]
         Persistence[SQLAlchemy repositories]
         Routes --> Services --> Domains
         Services --> Persistence
@@ -33,7 +33,7 @@ flowchart TB
 - `frontend/src/app`: composition, providers, and routing
 - `frontend/src/pages` and `components`: presentation
 
-The `users`, `auth`, and `drivers` domains demonstrate the module pattern: HTTP routes parse and serialize, services own transactions, repositories own queries, and models/schemas define persistence and contracts. Later domains should follow this boundary without adding abstraction that has no concrete use.
+The `users`, `auth`, `drivers`, and `rides` domains demonstrate the module pattern: HTTP routes parse and serialize, services own transactions, repositories own queries, and models/schemas define persistence and contracts. Later domains should follow this boundary without adding abstraction that has no concrete use.
 
 ## Runtime and health semantics
 
@@ -92,4 +92,28 @@ The API exchanges coordinates as latitude and longitude. Persistence constructs 
 
 Vehicle activation and availability changes lock the driver-profile row, serializing competing changes for one driver. A partial unique index is the final safeguard that only one vehicle can be active. Location publication uses PostgreSQL `ON CONFLICT DO UPDATE`, so the single current-location row is replaced atomically.
 
-The nearby-driver repository is intentionally internal until Phase 5 supplies ride matching and driver reservation. PostgreSQL is the source of truth in Phase 3; Redis is not introduced merely as a second location store.
+The nearby-driver repository is intentionally internal until Phase 5 supplies ride matching and driver reservation. PostgreSQL remains the source of truth; Redis is not introduced merely as a second location store.
+
+## Ride lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> REQUESTED
+    REQUESTED --> SEARCHING
+    SEARCHING --> DRIVER_ASSIGNED: accept
+    DRIVER_ASSIGNED --> DRIVER_ARRIVING: mark_arriving
+    DRIVER_ARRIVING --> DRIVER_ARRIVED: mark_arrived
+    DRIVER_ARRIVED --> IN_PROGRESS: start
+    IN_PROGRESS --> COMPLETED: complete
+    REQUESTED --> CANCELLED: cancel
+    SEARCHING --> CANCELLED: cancel
+    DRIVER_ASSIGNED --> CANCELLED: cancel
+    DRIVER_ARRIVING --> CANCELLED: cancel
+    DRIVER_ARRIVED --> CANCELLED: cancel
+```
+
+The entity exposes explicit operations for this graph. Routes cannot write arbitrary status values. Application services coordinate ride and driver state in one PostgreSQL transaction.
+
+Acceptance locks the ride row before the driver row. Competing drivers therefore observe the first committed assignment and only one can succeed. Partial unique indexes provide an independent final guard against multiple active rides for a rider or driver. All ride operations use this same lock ordering to limit deadlock risk.
+
+Phase 4 uses a compatible-ride queue and five-second UI polling. Phase 5 replaces this with proximity-ranked offers and timeout/rejection handling; Phase 6 replaces active-ride polling with WebSocket updates.

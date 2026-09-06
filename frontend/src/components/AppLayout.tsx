@@ -35,6 +35,7 @@ export function AppLayout() {
           {user ? (
             <>
               {user.role === 'DRIVER' && <Button type="text"><Link to="/driver">Driver workspace</Link></Button>}
+              {user.role === 'RIDER' && <Button type="text"><Link to="/rider">Request a ride</Link></Button>}
               <Button type="text"><Link to="/profile">{user.first_name}</Link></Button>
               <Button onClick={() => void signOut()}>Sign out</Button>
             </>
