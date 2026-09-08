@@ -1,10 +1,12 @@
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Card, Empty, List, Space, Typography, message } from 'antd'
+import { Alert, Button, Card, Empty, Space, Statistic, message } from 'antd'
 
 import {
-  listAvailableRides,
+  getCurrentRideOffer,
   listMyRides,
   performDriverRideAction,
+  rejectRideOffer,
   type DriverRideAction,
 } from '../api/rides'
 import type { DriverProfile, Ride } from '../api/types'
@@ -25,16 +27,24 @@ function errorMessage(error: unknown) {
 export function DriverRidePanel({ accessToken, profile }: { accessToken: string; profile: DriverProfile }) {
   const queryClient = useQueryClient()
   const [messageApi, contextHolder] = message.useMessage()
+  const [currentTime, setCurrentTime] = useState<number | null>(null)
+  useEffect(() => {
+    const updateCurrentTime = () => setCurrentTime(Date.now())
+    updateCurrentTime()
+    const interval = window.setInterval(updateCurrentTime, 1_000)
+    return () => window.clearInterval(interval)
+  }, [])
   const assigned = useQuery({
     queryKey: ['my-rides'],
     queryFn: () => listMyRides(accessToken),
     refetchInterval: 5_000,
   })
-  const available = useQuery({
-    queryKey: ['available-rides'],
-    queryFn: () => listAvailableRides(accessToken),
-    enabled: profile.status === 'AVAILABLE',
-    refetchInterval: 5_000,
+  const activeRide = assigned.data?.find(isActiveRide)
+  const offer = useQuery({
+    queryKey: ['current-ride-offer'],
+    queryFn: () => getCurrentRideOffer(accessToken),
+    enabled: profile.status === 'AVAILABLE' && !activeRide,
+    refetchInterval: 1_000,
   })
   const action = useMutation({
     mutationFn: ({ rideId, operation }: { rideId: string; operation: DriverRideAction }) => performDriverRideAction(accessToken, rideId, operation),
@@ -42,38 +52,72 @@ export function DriverRidePanel({ accessToken, profile }: { accessToken: string;
       void Promise.all([
         queryClient.invalidateQueries({ queryKey: ['driver-profile'] }),
         queryClient.invalidateQueries({ queryKey: ['my-rides'] }),
-        queryClient.invalidateQueries({ queryKey: ['available-rides'] }),
+        queryClient.invalidateQueries({ queryKey: ['current-ride-offer'] }),
       ])
       void messageApi.success('Ride updated')
     },
   })
-  const activeRide = assigned.data?.find(isActiveRide)
+  const rejection = useMutation({
+    mutationFn: (rideId: string) => rejectRideOffer(accessToken, rideId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['current-ride-offer'] })
+      void messageApi.info('Offer declined')
+    },
+  })
   const operation = activeRide ? nextAction[activeRide.status] : undefined
+  const currentOffer = offer.data
+  const secondsRemaining = currentOffer && currentTime !== null
+    ? Math.max(0, Math.ceil((Date.parse(currentOffer.expires_at) - currentTime) / 1_000))
+    : 0
+  const offerDistanceKm = currentOffer
+    ? (Number(currentOffer.distance_m) / 1_000).toFixed(2)
+    : null
 
   return (
     <div className="driver-rides">
       {contextHolder}
       {action.isError && <Alert type="error" showIcon message={errorMessage(action.error)} />}
+      {rejection.isError && <Alert type="error" showIcon message={errorMessage(rejection.error)} />}
       {activeRide && (
         <Card bordered={false} title="Active ride">
           <RideSummary ride={activeRide} />
           {operation && <Button type="primary" size="large" loading={action.isPending} onClick={() => action.mutate({ rideId: activeRide.id, operation: operation.action })}>{operation.label}</Button>}
         </Card>
       )}
-      <Card bordered={false} title="Open ride requests">
+      <Card bordered={false} title="Current ride offer">
         {profile.status !== 'AVAILABLE' ? (
-          <Alert type="info" showIcon message="Go online to view compatible ride requests." />
+          <Alert type="info" showIcon message="Go online to receive nearby ride offers." />
+        ) : activeRide ? (
+          <Alert type="info" showIcon message="Complete your active ride before receiving another offer." />
+        ) : currentOffer ? (
+          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <Space wrap size="large">
+              <Statistic title="Pickup distance" value={offerDistanceKm ?? '0.00'} suffix="km" />
+              <Statistic title="Respond within" value={secondsRemaining} suffix="seconds" />
+            </Space>
+            <RideSummary ride={currentOffer.ride} />
+            <Space>
+              <Button
+                type="primary"
+                size="large"
+                loading={action.isPending}
+                disabled={secondsRemaining === 0 || rejection.isPending}
+                onClick={() => action.mutate({ rideId: currentOffer.ride.id, operation: 'accept' })}
+              >
+                Accept ride
+              </Button>
+              <Button
+                size="large"
+                loading={rejection.isPending}
+                disabled={secondsRemaining === 0 || action.isPending}
+                onClick={() => rejection.mutate(currentOffer.ride.id)}
+              >
+                Decline
+              </Button>
+            </Space>
+          </Space>
         ) : (
-          <List
-            loading={available.isPending}
-            dataSource={available.data ?? []}
-            locale={{ emptyText: <Empty description="No open requests" /> }}
-            renderItem={(ride) => (
-              <List.Item actions={[<Button type="primary" key="accept" loading={action.isPending} onClick={() => action.mutate({ rideId: ride.id, operation: 'accept' })}>Accept</Button>]}>
-                <List.Item.Meta title={<Space><Typography.Text strong>{ride.ride_type} ride</Typography.Text><Typography.Text type="secondary">{ride.estimated_distance_km} km</Typography.Text></Space>} description={<RideSummary ride={ride} />} />
-              </List.Item>
-            )}
-          />
+          <Empty description={offer.isPending ? 'Checking for nearby requests…' : 'No ride offer right now'} />
         )}
       </Card>
     </div>

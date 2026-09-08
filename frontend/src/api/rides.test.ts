@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { cancelRide, estimateRide, performDriverRideAction, requestRide } from './rides'
+import {
+  cancelRide,
+  estimateRide,
+  getCurrentRideOffer,
+  performDriverRideAction,
+  rejectRideOffer,
+  requestRide,
+} from './rides'
 
 const rideInput = {
   pickup: { latitude: -26.2041, longitude: 28.0473 },
@@ -33,6 +40,20 @@ describe('ride API', () => {
 
     expect(fetchMock.mock.calls[0][0]).toContain('/rides/ride-id/arriving')
     expect(fetchMock.mock.calls[1][0]).toContain('/rides/ride-id/complete')
+  })
+
+  it('loads and rejects only the targeted driver offer', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => null })
+      .mockResolvedValueOnce({ ok: true, status: 204, json: async () => ({}) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getCurrentRideOffer('token')
+    await rejectRideOffer('token', 'ride-id')
+
+    expect(fetchMock.mock.calls[0][0]).toContain('/rides/offers/current')
+    expect(fetchMock.mock.calls[1][0]).toContain('/rides/ride-id/reject')
+    expect(fetchMock.mock.calls[1][1]).toEqual(expect.objectContaining({ method: 'POST' }))
   })
 
   it('cancels through the rider operation rather than a status patch', async () => {

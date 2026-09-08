@@ -8,18 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import (
     ActiveRideExists,
     DriverProfileNotFound,
-    DriverUnavailable,
     PricingRuleNotFound,
     RideAccessDenied,
     RideNotFound,
 )
 from app.domains.drivers.models import DriverProfile, DriverStatus, VehicleCategory
-from app.domains.drivers.repository import (
-    DriverLocationRepository,
-    DriverRepository,
-    VehicleRepository,
-)
-from app.domains.rides.models import PricingRule, Ride, RideStatus, RideType
+from app.domains.drivers.repository import DriverLocationRepository, DriverRepository
+from app.domains.rides.models import PricingRule, Ride, RideStatus
 from app.domains.rides.repository import LocatedRide, PricingRuleRepository, RideRepository
 from app.domains.rides.schemas import FareEstimateResponse, RideRequest, RideResponse
 from app.domains.users.models import User, UserRole
@@ -36,7 +31,6 @@ class RideService:
         self.pricing = PricingRuleRepository(session)
         self.drivers = DriverRepository(session)
         self.locations = DriverLocationRepository(session)
-        self.vehicles = VehicleRepository(session)
 
     async def estimate(self, data: RideRequest) -> FareEstimateResponse:
         rule, distance_km, duration_minutes, fare = await self._calculate(data)
@@ -76,7 +70,7 @@ class RideService:
         except IntegrityError as exc:
             await self.session.rollback()
             raise ActiveRideExists("Rider already has an active ride") from exc
-        return await self._response_for(ride.id)
+        return await self.response_for(ride.id)
 
     async def list_for_user(self, user: User) -> list[RideResponse]:
         if user.role is UserRole.RIDER:
@@ -90,20 +84,6 @@ class RideService:
             raise RideAccessDenied("Administrators do not have a personal ride history")
         return [self._response(located) for located in rides]
 
-    async def list_available(self, user_id: uuid.UUID) -> list[RideResponse]:
-        profile = await self.drivers.get_by_user_id(user_id)
-        if profile is None:
-            raise DriverProfileNotFound("Create a driver profile first")
-        if profile.status is not DriverStatus.AVAILABLE:
-            raise DriverUnavailable("Driver must be available to view open ride requests")
-        vehicle = await self.vehicles.get_active_for_driver(profile.id)
-        if vehicle is None:
-            raise DriverUnavailable("Driver requires an active vehicle")
-        return [
-            self._response(located)
-            for located in await self.rides.list_searching(RideType(vehicle.category.value))
-        ]
-
     async def get(self, user: User, ride_id: uuid.UUID) -> RideResponse:
         ride = await self._ride(ride_id)
         if user.role is UserRole.RIDER and ride.rider_id != user.id:
@@ -112,22 +92,7 @@ class RideService:
             profile = await self.drivers.get_by_user_id(user.id)
             if profile is None or ride.driver_id != profile.id:
                 raise RideAccessDenied("Ride is not assigned to this driver")
-        return await self._response_for(ride.id)
-
-    async def accept(self, user_id: uuid.UUID, ride_id: uuid.UUID) -> RideResponse:
-        ride = await self._locked_ride(ride_id)
-        profile = await self.drivers.get_by_user_id(user_id, for_update=True)
-        if profile is None:
-            raise DriverProfileNotFound("Create a driver profile first")
-        if profile.status is not DriverStatus.AVAILABLE:
-            raise DriverUnavailable("Driver must be available to accept a ride")
-        vehicle = await self.vehicles.get_active_for_driver(profile.id)
-        if vehicle is None or vehicle.category.value != ride.ride_type.value:
-            raise DriverUnavailable("Active vehicle does not support this ride type")
-        ride.accept(profile.id, vehicle.id)
-        profile.status = DriverStatus.RESERVED
-        await self._commit()
-        return await self._response_for(ride.id)
+        return await self.response_for(ride.id)
 
     async def cancel(self, rider_id: uuid.UUID, ride_id: uuid.UUID) -> RideResponse:
         ride = await self._locked_ride(ride_id)
@@ -140,33 +105,33 @@ class RideService:
         if driver is not None:
             driver.status = DriverStatus.AVAILABLE
         await self._commit()
-        return await self._response_for(ride.id)
+        return await self.response_for(ride.id)
 
     async def mark_arriving(self, user_id: uuid.UUID, ride_id: uuid.UUID) -> RideResponse:
         ride, _ = await self._assigned_ride(user_id, ride_id)
         ride.mark_arriving()
         await self._commit()
-        return await self._response_for(ride.id)
+        return await self.response_for(ride.id)
 
     async def mark_arrived(self, user_id: uuid.UUID, ride_id: uuid.UUID) -> RideResponse:
         ride, _ = await self._assigned_ride(user_id, ride_id)
         ride.mark_arrived()
         await self._commit()
-        return await self._response_for(ride.id)
+        return await self.response_for(ride.id)
 
     async def start(self, user_id: uuid.UUID, ride_id: uuid.UUID) -> RideResponse:
         ride, driver = await self._assigned_ride(user_id, ride_id)
         ride.start()
         driver.status = DriverStatus.ON_TRIP
         await self._commit()
-        return await self._response_for(ride.id)
+        return await self.response_for(ride.id)
 
     async def complete(self, user_id: uuid.UUID, ride_id: uuid.UUID) -> RideResponse:
         ride, driver = await self._assigned_ride(user_id, ride_id)
         ride.complete(ride.estimated_fare)
         driver.status = DriverStatus.AVAILABLE
         await self._commit()
-        return await self._response_for(ride.id)
+        return await self.response_for(ride.id)
 
     async def _calculate(self, data: RideRequest) -> tuple[PricingRule, Decimal, Decimal, Decimal]:
         rule = await self.pricing.get_active(data.ride_type)
@@ -221,7 +186,7 @@ class RideService:
             await self.session.rollback()
             raise
 
-    async def _response_for(self, ride_id: uuid.UUID) -> RideResponse:
+    async def response_for(self, ride_id: uuid.UUID) -> RideResponse:
         return self._response(await self.rides.locate(ride_id))
 
     @staticmethod

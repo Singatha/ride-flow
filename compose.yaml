@@ -20,6 +20,18 @@ services:
       retries: 10
     restart: unless-stopped
 
+  redis:
+    image: redis:8.2-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
@@ -28,10 +40,15 @@ services:
       RIDEFLOW_ENVIRONMENT: ${RIDEFLOW_ENVIRONMENT:-local}
       RIDEFLOW_DEBUG: ${RIDEFLOW_DEBUG:-false}
       RIDEFLOW_DATABASE_URL: ${RIDEFLOW_DATABASE_URL:-postgresql+asyncpg://rideflow:rideflow@db:5432/rideflow}
+      RIDEFLOW_REDIS_URL: ${RIDEFLOW_REDIS_URL:-redis://redis:6379/0}
       RIDEFLOW_CORS_ORIGINS: '${RIDEFLOW_CORS_ORIGINS:-["http://localhost:5173"]}'
       RIDEFLOW_JWT_SECRET: ${RIDEFLOW_JWT_SECRET:-local-development-secret-change-before-production}
       RIDEFLOW_ACCESS_TOKEN_TTL_MINUTES: ${RIDEFLOW_ACCESS_TOKEN_TTL_MINUTES:-15}
       RIDEFLOW_REFRESH_TOKEN_TTL_DAYS: ${RIDEFLOW_REFRESH_TOKEN_TTL_DAYS:-30}
+      RIDEFLOW_RIDE_OFFER_TTL_SECONDS: ${RIDEFLOW_RIDE_OFFER_TTL_SECONDS:-20}
+      RIDEFLOW_MATCHING_STATE_TTL_SECONDS: ${RIDEFLOW_MATCHING_STATE_TTL_SECONDS:-600}
+      RIDEFLOW_MATCHING_LOCK_TTL_SECONDS: ${RIDEFLOW_MATCHING_LOCK_TTL_SECONDS:-10}
+      RIDEFLOW_MATCHING_WORKER_INTERVAL_SECONDS: ${RIDEFLOW_MATCHING_WORKER_INTERVAL_SECONDS:-1}
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     volumes:
       - ./backend:/app
@@ -40,11 +57,36 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  matching-worker:
+    build:
+      context: ./backend
+      target: development
+    environment:
+      RIDEFLOW_ENVIRONMENT: ${RIDEFLOW_ENVIRONMENT:-local}
+      RIDEFLOW_DATABASE_URL: ${RIDEFLOW_DATABASE_URL:-postgresql+asyncpg://rideflow:rideflow@db:5432/rideflow}
+      RIDEFLOW_REDIS_URL: ${RIDEFLOW_REDIS_URL:-redis://redis:6379/0}
+      RIDEFLOW_JWT_SECRET: ${RIDEFLOW_JWT_SECRET:-local-development-secret-change-before-production}
+      RIDEFLOW_RIDE_OFFER_TTL_SECONDS: ${RIDEFLOW_RIDE_OFFER_TTL_SECONDS:-20}
+      RIDEFLOW_MATCHING_STATE_TTL_SECONDS: ${RIDEFLOW_MATCHING_STATE_TTL_SECONDS:-600}
+      RIDEFLOW_MATCHING_LOCK_TTL_SECONDS: ${RIDEFLOW_MATCHING_LOCK_TTL_SECONDS:-10}
+      RIDEFLOW_MATCHING_WORKER_INTERVAL_SECONDS: ${RIDEFLOW_MATCHING_WORKER_INTERVAL_SECONDS:-1}
+    command: python -m app.workers.matching
+    volumes:
+      - ./backend:/app
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
 
   frontend:
     build:

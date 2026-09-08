@@ -9,6 +9,13 @@ export type RideRequestInput = {
 
 export type DriverRideAction = 'accept' | 'arriving' | 'arrive' | 'start' | 'complete'
 
+export type RideOffer = {
+  ride: Ride
+  distance_m: string
+  offered_at: string
+  expires_at: string
+}
+
 export function estimateRide(accessToken: string, input: RideRequestInput) {
   return apiRequest<FareEstimate>('/rides/estimate', {
     method: 'POST',
@@ -29,8 +36,8 @@ export function listMyRides(accessToken: string) {
   return apiRequest<Ride[]>('/rides', { accessToken })
 }
 
-export function listAvailableRides(accessToken: string) {
-  return apiRequest<Ride[]>('/rides/available', { accessToken })
+export function getCurrentRideOffer(accessToken: string) {
+  return apiRequest<RideOffer | null>('/rides/offers/current', { accessToken })
 }
 
 export function cancelRide(accessToken: string, rideId: string) {
@@ -46,6 +53,13 @@ export function performDriverRideAction(
   action: DriverRideAction,
 ) {
   return apiRequest<Ride>(`/rides/${rideId}/${action}`, {
+    method: 'POST',
+    accessToken,
+  })
+}
+
+export function rejectRideOffer(accessToken: string, rideId: string) {
+  return apiRequest<void>(`/rides/${rideId}/reject`, {
     method: 'POST',
     accessToken,
   })

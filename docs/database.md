@@ -4,7 +4,7 @@ PostgreSQL is RideFlow's persistent source of truth. The `postgis/postgis:16-3.4
 
 ## Schema management
 
-Alembic owns all schema changes. Revision `20260906_0001` enables PostGIS, `0002` adds authentication, `0003` adds drivers, and `0004` adds pricing and rides. SQLAlchemy metadata uses a naming convention so generated constraint and index names remain deterministic.
+Alembic owns all schema changes. Revision `20260906_0001` enables PostGIS, `0002` adds authentication, `0003` adds drivers, `0004` adds pricing and rides, and `0005` adds match attempts. SQLAlchemy metadata uses a naming convention so generated constraint and index names remain deterministic.
 
 Alembic autogeneration is restricted to application-owned metadata. PostGIS and Tiger/geocoder tables are extension-owned and must never appear as drop operations in RideFlow migrations.
 
@@ -27,6 +27,8 @@ Alembic autogeneration is restricted to application-owned metadata. PostGIS and 
 `pricing_rules` stores one active rule per ride type using a partial unique index. Money and rate fields use fixed-precision `NUMERIC`; `average_speed_kph` supports the initial duration estimate. The Phase 4 migration seeds ZAR rules for `STANDARD`, `PREMIUM`, and `XL` so pricing is data rather than scattered constants.
 
 `rides` stores rider, optional assigned driver and vehicle, the pricing rule used, ride type/state, pickup and destination geography points, estimates, final fare, and lifecycle timestamps. Capturing the vehicle preserves the assignment even if the driver's active vehicle changes after completion. The pickup has a GiST index for future matching queries. Compound indexes support rider history, driver work, and open-status scans.
+
+`ride_match_attempts` is the durable audit and recovery record for sequential offers. Each row stores ride, driver, pickup distance, offer/deadline timestamps, optional response time, and one of `OFFERED`, `REJECTED`, `TIMED_OUT`, `ACCEPTED`, or `CANCELLED`. A ride-driver unique constraint prevents retries to the same candidate. Partial unique indexes allow at most one live `OFFERED` row per ride and per driver, independently of Redis.
 
 Partial unique indexes constrain each rider and driver to at most one ride whose status is not `COMPLETED` or `CANCELLED`. These database invariants backstop row locking and remain effective if another code path is introduced later.
 
