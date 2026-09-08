@@ -1,13 +1,18 @@
 import asyncio
 import uuid
+from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
+from app.cache.redis import redis_client
 from app.core.config import get_settings
 from app.database.session import async_session_factory
 from app.domains.auth.security import create_access_token
+from app.domains.matching.service import MatchingService
+from app.domains.rides.models import MatchAttemptOutcome, RideMatchAttempt
 from app.domains.users.models import User, UserRole
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
@@ -61,6 +66,8 @@ async def prepare_driver(
     *,
     suffix: str,
     category: str = "STANDARD",
+    latitude: float = -26.2042,
+    longitude: float = 28.0474,
 ) -> tuple[dict[str, str], str]:
     driver_session = await register(client, f"driver-{suffix}@example.com", "DRIVER")
     driver_headers = headers(driver_session)
@@ -97,7 +104,7 @@ async def prepare_driver(
     location = await client.put(
         "/api/v1/drivers/location",
         headers=driver_headers,
-        json={"latitude": -26.2042, "longitude": 28.0474},
+        json={"latitude": latitude, "longitude": longitude},
     )
     assert location.status_code == 200, location.text
     online = await client.put("/api/v1/drivers/status/online", headers=driver_headers)
@@ -138,15 +145,15 @@ async def test_estimate_uses_postgis_pricing_rules_and_matching_vehicle_type(
     assert Decimal(body["estimated_fare"]) == expected_fare
 
     ride = await request_ride(api_client, rider_headers)
-    standard_requests = await api_client.get("/api/v1/rides/available", headers=standard_headers)
-    premium_requests = await api_client.get("/api/v1/rides/available", headers=premium_headers)
+    standard_offer = await api_client.get("/api/v1/rides/offers/current", headers=standard_headers)
+    premium_offer = await api_client.get("/api/v1/rides/offers/current", headers=premium_headers)
     incompatible_acceptance = await api_client.post(
         f"/api/v1/rides/{ride['id']}/accept", headers=premium_headers
     )
-    assert [request["id"] for request in standard_requests.json()] == [ride["id"]]
-    assert premium_requests.json() == []
-    assert incompatible_acceptance.status_code == 409
-    assert incompatible_acceptance.json()["error"]["code"] == "DRIVER_UNAVAILABLE"
+    assert standard_offer.json()["ride"]["id"] == ride["id"]
+    assert premium_offer.json() is None
+    assert incompatible_acceptance.status_code == 403
+    assert incompatible_acceptance.json()["error"]["code"] == "RIDE_ACCESS_DENIED"
 
 
 async def test_request_is_searching_private_and_one_active_per_rider(
@@ -180,33 +187,29 @@ async def test_request_is_searching_private_and_one_active_per_rider(
 async def test_concurrent_acceptance_reserves_exactly_one_driver(
     api_client: AsyncClient,
 ) -> None:
+    driver_headers, _ = await prepare_driver(api_client, suffix="ONE")
     rider = await register(api_client, "rider@example.com", "RIDER")
     ride = await request_ride(api_client, headers(rider))
-    first_headers, _ = await prepare_driver(api_client, suffix="ONE")
-    second_headers, _ = await prepare_driver(api_client, suffix="TWO")
 
     first, second = await asyncio.gather(
-        api_client.post(f"/api/v1/rides/{ride['id']}/accept", headers=first_headers),
-        api_client.post(f"/api/v1/rides/{ride['id']}/accept", headers=second_headers),
+        api_client.post(f"/api/v1/rides/{ride['id']}/accept", headers=driver_headers),
+        api_client.post(f"/api/v1/rides/{ride['id']}/accept", headers=driver_headers),
     )
 
     assert sorted([first.status_code, second.status_code]) == [200, 409]
     failed = first if first.status_code == 409 else second
-    assert failed.json()["error"]["code"] == "RIDE_ALREADY_ACCEPTED"
-    statuses = [
-        (await api_client.get("/api/v1/drivers/me", headers=driver_headers)).json()["status"]
-        for driver_headers in (first_headers, second_headers)
-    ]
-    assert sorted(statuses) == ["AVAILABLE", "RESERVED"]
+    assert failed.json()["error"]["code"] == "RIDE_OFFER_NOT_FOUND"
+    driver = await api_client.get("/api/v1/drivers/me", headers=driver_headers)
+    assert driver.json()["status"] == "RESERVED"
 
 
 async def test_driver_completes_valid_lifecycle_and_invalid_jump_is_rejected(
     api_client: AsyncClient,
 ) -> None:
+    driver_headers, _ = await prepare_driver(api_client, suffix="LIFECYCLE")
     rider = await register(api_client, "rider@example.com", "RIDER")
     rider_headers = headers(rider)
     ride = await request_ride(api_client, rider_headers)
-    driver_headers, _ = await prepare_driver(api_client, suffix="LIFECYCLE")
     other_headers, _ = await prepare_driver(api_client, suffix="UNASSIGNED")
 
     accepted = await api_client.post(f"/api/v1/rides/{ride['id']}/accept", headers=driver_headers)
@@ -245,10 +248,10 @@ async def test_driver_completes_valid_lifecycle_and_invalid_jump_is_rejected(
 async def test_rider_cancellation_releases_driver_but_cannot_cancel_active_trip(
     api_client: AsyncClient,
 ) -> None:
+    driver_headers, _ = await prepare_driver(api_client, suffix="CANCEL")
     rider = await register(api_client, "rider@example.com", "RIDER")
     rider_headers = headers(rider)
     ride = await request_ride(api_client, rider_headers)
-    driver_headers, _ = await prepare_driver(api_client, suffix="CANCEL")
     await api_client.post(f"/api/v1/rides/{ride['id']}/accept", headers=driver_headers)
 
     cancelled = await api_client.post(f"/api/v1/rides/{ride['id']}/cancel", headers=rider_headers)
@@ -268,3 +271,144 @@ async def test_rider_cancellation_releases_driver_but_cannot_cancel_active_trip(
     )
     assert too_late.status_code == 409
     assert too_late.json()["error"]["code"] == "INVALID_RIDE_TRANSITION"
+
+
+async def test_nearest_driver_rejection_and_timeout_advance_the_offer(
+    api_client: AsyncClient,
+) -> None:
+    nearest_headers, nearest_id = await prepare_driver(
+        api_client,
+        suffix="NEAREST",
+        latitude=-26.2042,
+        longitude=28.0474,
+    )
+    farther_headers, farther_id = await prepare_driver(
+        api_client,
+        suffix="FARTHER",
+        latitude=-26.2141,
+        longitude=28.0473,
+    )
+    rider = await register(api_client, "rider@example.com", "RIDER")
+    ride = await request_ride(api_client, headers(rider))
+
+    nearest_offer = await api_client.get("/api/v1/rides/offers/current", headers=nearest_headers)
+    assert nearest_offer.status_code == 200
+    assert nearest_offer.json()["ride"]["id"] == ride["id"]
+
+    rejected = await api_client.post(f"/api/v1/rides/{ride['id']}/reject", headers=nearest_headers)
+    farther_offer = await api_client.get("/api/v1/rides/offers/current", headers=farther_headers)
+    assert rejected.status_code == 204
+    assert farther_offer.json()["ride"]["id"] == ride["id"]
+    assert float(nearest_offer.json()["distance_m"]) < float(farther_offer.json()["distance_m"])
+
+    async with async_session_factory() as session:
+        service = MatchingService(session, redis_client, get_settings())
+        processed = await service.process_expired_offers(
+            now=datetime.now(UTC) + timedelta(minutes=5)
+        )
+    assert processed == 1
+    assert (
+        await api_client.get("/api/v1/rides/offers/current", headers=farther_headers)
+    ).json() is None
+
+    async with async_session_factory() as session:
+        attempts = (
+            await session.execute(
+                select(RideMatchAttempt).where(
+                    RideMatchAttempt.ride_id == uuid.UUID(str(ride["id"]))
+                )
+            )
+        ).scalars()
+        outcomes = {str(attempt.driver_id): attempt.outcome for attempt in attempts}
+    assert outcomes == {
+        nearest_id: MatchAttemptOutcome.REJECTED,
+        farther_id: MatchAttemptOutcome.TIMED_OUT,
+    }
+
+
+async def test_redis_claim_allows_only_one_simultaneous_offer_per_driver(
+    api_client: AsyncClient,
+) -> None:
+    driver_headers, _ = await prepare_driver(api_client, suffix="SOLE")
+    first_rider = await register(api_client, "first-rider@example.com", "RIDER")
+    second_rider = await register(api_client, "second-rider@example.com", "RIDER")
+
+    first_ride, second_ride = await asyncio.gather(
+        request_ride(api_client, headers(first_rider)),
+        request_ride(api_client, headers(second_rider)),
+    )
+    current = await api_client.get("/api/v1/rides/offers/current", headers=driver_headers)
+    offered_ride_id = current.json()["ride"]["id"]
+    assert offered_ride_id in {first_ride["id"], second_ride["id"]}
+
+    async with async_session_factory() as session:
+        offered_attempts = (
+            (
+                await session.execute(
+                    select(RideMatchAttempt).where(
+                        RideMatchAttempt.outcome == MatchAttemptOutcome.OFFERED
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert len(offered_attempts) == 1
+
+
+async def test_matching_restores_the_durable_offer_after_redis_state_loss(
+    api_client: AsyncClient,
+) -> None:
+    driver_headers, driver_id = await prepare_driver(api_client, suffix="RECOVERY")
+    rider = await register(api_client, "rider@example.com", "RIDER")
+    ride = await request_ride(api_client, headers(rider))
+
+    await redis_client.flushdb()
+    async with async_session_factory() as session:
+        service = MatchingService(session, redis_client, get_settings())
+        recovered = await service.recover_searching_rides()
+
+    offer = await api_client.get("/api/v1/rides/offers/current", headers=driver_headers)
+    assert recovered == 1
+    assert offer.json()["ride"]["id"] == ride["id"]
+
+    async with async_session_factory() as session:
+        attempts = (
+            (
+                await session.execute(
+                    select(RideMatchAttempt).where(
+                        RideMatchAttempt.ride_id == uuid.UUID(str(ride["id"]))
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert [(str(attempt.driver_id), attempt.outcome) for attempt in attempts] == [
+        (driver_id, MatchAttemptOutcome.OFFERED)
+    ]
+
+
+async def test_cancellation_closes_a_durable_offer_after_redis_state_loss(
+    api_client: AsyncClient,
+) -> None:
+    _, driver_id = await prepare_driver(api_client, suffix="CANCEL-RECOVERY")
+    rider = await register(api_client, "rider@example.com", "RIDER")
+    rider_headers = headers(rider)
+    ride = await request_ride(api_client, rider_headers)
+
+    await redis_client.flushdb()
+    cancelled = await api_client.post(f"/api/v1/rides/{ride['id']}/cancel", headers=rider_headers)
+
+    async with async_session_factory() as session:
+        attempt = (
+            await session.execute(
+                select(RideMatchAttempt).where(
+                    RideMatchAttempt.ride_id == uuid.UUID(str(ride["id"]))
+                )
+            )
+        ).scalar_one()
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "CANCELLED"
+    assert str(attempt.driver_id) == driver_id
+    assert attempt.outcome is MatchAttemptOutcome.CANCELLED

@@ -23,7 +23,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
-    from app.domains.rides.models import Ride
+    from app.domains.rides.models import Ride, RideMatchAttempt
     from app.domains.users.models import User
 
 
@@ -85,6 +85,7 @@ class DriverProfile(TimestampMixin, Base):
         back_populates="driver", cascade="all, delete-orphan", uselist=False
     )
     rides: Mapped[list["Ride"]] = relationship(back_populates="driver")
+    match_attempts: Mapped[list["RideMatchAttempt"]] = relationship(back_populates="driver")
 
 
 class Vehicle(TimestampMixin, Base):

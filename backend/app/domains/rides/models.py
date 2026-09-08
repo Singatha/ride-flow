@@ -15,6 +15,7 @@ from sqlalchemy import (
     Index,
     Numeric,
     String,
+    UniqueConstraint,
     Uuid,
     text,
 )
@@ -42,6 +43,14 @@ class RideStatus(StrEnum):
     DRIVER_ARRIVED = "DRIVER_ARRIVED"
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+
+
+class MatchAttemptOutcome(StrEnum):
+    OFFERED = "OFFERED"
+    REJECTED = "REJECTED"
+    TIMED_OUT = "TIMED_OUT"
+    ACCEPTED = "ACCEPTED"
     CANCELLED = "CANCELLED"
 
 
@@ -169,6 +178,9 @@ class Ride(TimestampMixin, Base):
     driver: Mapped["DriverProfile | None"] = relationship(back_populates="rides")
     vehicle: Mapped["Vehicle | None"] = relationship(back_populates="rides")
     pricing_rule: Mapped[PricingRule] = relationship(back_populates="rides")
+    match_attempts: Mapped[list["RideMatchAttempt"]] = relationship(
+        back_populates="ride", cascade="all, delete-orphan"
+    )
 
     def begin_search(self) -> None:
         self._transition(RideStatus.SEARCHING)
@@ -219,3 +231,48 @@ class Ride(TimestampMixin, Base):
 
 
 Index("ix_rides_pickup_location_gist", Ride.pickup_location, postgresql_using="gist")
+
+
+class RideMatchAttempt(TimestampMixin, Base):
+    __tablename__ = "ride_match_attempts"
+    __table_args__ = (
+        CheckConstraint("distance_m >= 0", name="nonnegative_distance"),
+        UniqueConstraint("ride_id", "driver_id"),
+        Index("ix_ride_match_attempts_ride_outcome", "ride_id", "outcome"),
+        Index(
+            "uq_ride_match_attempts_one_offered_per_ride",
+            "ride_id",
+            unique=True,
+            postgresql_where=text("outcome = 'OFFERED'"),
+        ),
+        Index(
+            "uq_ride_match_attempts_one_offer_per_driver",
+            "driver_id",
+            unique=True,
+            postgresql_where=text("outcome = 'OFFERED'"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    ride_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("rides.id", ondelete="CASCADE"), index=True
+    )
+    driver_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("driver_profiles.id", ondelete="RESTRICT"), index=True
+    )
+    outcome: Mapped[MatchAttemptOutcome] = mapped_column(
+        Enum(
+            MatchAttemptOutcome,
+            name="match_attempt_outcome",
+            values_callable=lambda outcomes: [outcome.value for outcome in outcomes],
+        ),
+        default=MatchAttemptOutcome.OFFERED,
+        server_default=MatchAttemptOutcome.OFFERED.value,
+    )
+    distance_m: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    offered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    ride: Mapped[Ride] = relationship(back_populates="match_attempts")
+    driver: Mapped["DriverProfile"] = relationship(back_populates="match_attempts")

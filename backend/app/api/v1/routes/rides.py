@@ -3,9 +3,15 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
 
-from app.api.v1.dependencies import get_ride_service
+from app.api.v1.dependencies import get_matching_service, get_ride_service
 from app.domains.auth.dependencies import RoleChecker, get_current_user
-from app.domains.rides.schemas import FareEstimateResponse, RideRequest, RideResponse
+from app.domains.matching.service import MatchingService
+from app.domains.rides.schemas import (
+    FareEstimateResponse,
+    RideOfferResponse,
+    RideRequest,
+    RideResponse,
+)
 from app.domains.rides.service import RideService
 from app.domains.users.models import User, UserRole
 
@@ -23,21 +29,21 @@ async def estimate_ride(
     return await service.estimate(data)
 
 
-@router.get("/available", response_model=list[RideResponse])
-async def list_available_rides(
+@router.get("/offers/current", response_model=RideOfferResponse | None)
+async def get_current_offer(
     driver: Annotated[User, Depends(require_driver)],
-    service: Annotated[RideService, Depends(get_ride_service)],
-) -> list[RideResponse]:
-    return await service.list_available(driver.id)
+    service: Annotated[MatchingService, Depends(get_matching_service)],
+) -> RideOfferResponse | None:
+    return await service.current_offer(driver.id)
 
 
 @router.post("", response_model=RideResponse, status_code=status.HTTP_201_CREATED)
 async def request_ride(
     data: RideRequest,
     rider: Annotated[User, Depends(require_rider)],
-    service: Annotated[RideService, Depends(get_ride_service)],
+    service: Annotated[MatchingService, Depends(get_matching_service)],
 ) -> RideResponse:
-    return await service.create(rider, data)
+    return await service.create_ride(rider, data)
 
 
 @router.get("", response_model=list[RideResponse])
@@ -61,18 +67,27 @@ async def get_ride(
 async def accept_ride(
     ride_id: uuid.UUID,
     driver: Annotated[User, Depends(require_driver)],
-    service: Annotated[RideService, Depends(get_ride_service)],
+    service: Annotated[MatchingService, Depends(get_matching_service)],
 ) -> RideResponse:
-    return await service.accept(driver.id, ride_id)
+    return await service.accept_offer(driver.id, ride_id)
+
+
+@router.post("/{ride_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
+async def reject_ride(
+    ride_id: uuid.UUID,
+    driver: Annotated[User, Depends(require_driver)],
+    service: Annotated[MatchingService, Depends(get_matching_service)],
+) -> None:
+    await service.reject_offer(driver.id, ride_id)
 
 
 @router.post("/{ride_id}/cancel", response_model=RideResponse)
 async def cancel_ride(
     ride_id: uuid.UUID,
     rider: Annotated[User, Depends(require_rider)],
-    service: Annotated[RideService, Depends(get_ride_service)],
+    service: Annotated[MatchingService, Depends(get_matching_service)],
 ) -> RideResponse:
-    return await service.cancel(rider.id, ride_id)
+    return await service.cancel_ride(rider.id, ride_id)
 
 
 @router.post("/{ride_id}/arriving", response_model=RideResponse)

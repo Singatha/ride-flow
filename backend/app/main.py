@@ -6,6 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
+from app.cache.redis import redis_client
 from app.core.config import Settings, get_settings
 from app.core.error_handlers import application_error_handler, request_validation_error_handler
 from app.core.exceptions import ApplicationError
@@ -15,6 +16,7 @@ from app.database.session import engine
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     yield
+    await redis_client.aclose()
     await engine.dispose()
 
 

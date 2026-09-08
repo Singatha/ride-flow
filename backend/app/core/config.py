@@ -18,10 +18,15 @@ class Settings(BaseSettings):
     environment: str = "local"
     debug: bool = False
     database_url: str = "postgresql+asyncpg://rideflow:rideflow@localhost:5432/rideflow"
+    redis_url: str = "redis://localhost:6379/0"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
     jwt_secret: SecretStr = SecretStr("local-development-secret-change-before-production")
     access_token_ttl_minutes: int = Field(default=15, ge=1, le=60)
     refresh_token_ttl_days: int = Field(default=30, ge=1, le=90)
+    ride_offer_ttl_seconds: int = Field(default=20, ge=2, le=300)
+    matching_state_ttl_seconds: int = Field(default=600, ge=60, le=86_400)
+    matching_lock_ttl_seconds: int = Field(default=10, ge=2, le=60)
+    matching_worker_interval_seconds: float = Field(default=1.0, ge=0.1, le=30)
 
     @field_validator("jwt_secret")
     @classmethod

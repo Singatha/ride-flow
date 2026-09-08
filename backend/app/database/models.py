@@ -2,7 +2,7 @@
 
 from app.domains.auth.models import RefreshToken
 from app.domains.drivers.models import DriverLocation, DriverProfile, Vehicle
-from app.domains.rides.models import PricingRule, Ride
+from app.domains.rides.models import PricingRule, Ride, RideMatchAttempt
 from app.domains.users.models import User
 
 __all__ = [
@@ -11,6 +11,7 @@ __all__ = [
     "PricingRule",
     "RefreshToken",
     "Ride",
+    "RideMatchAttempt",
     "User",
     "Vehicle",
 ]

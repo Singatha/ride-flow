@@ -119,11 +119,24 @@ class DriverLocationRepository:
         latitude: float,
         longitude: float,
         *,
+        category: VehicleCategory | None = None,
+        excluded_driver_ids: set[uuid.UUID] | None = None,
         radius_m: float = 5_000,
         limit: int = 20,
     ) -> list[NearbyDriver]:
         pickup = func.ST_GeogFromText(f"SRID=4326;POINT({longitude} {latitude})")
         distance = func.ST_Distance(DriverLocation.location, pickup)
+        filters = [
+            DriverProfile.status == DriverStatus.AVAILABLE,
+            DriverProfile.verification_status == DriverVerificationStatus.APPROVED,
+            User.is_active.is_(True),
+            Vehicle.is_active.is_(True),
+            func.ST_DWithin(DriverLocation.location, pickup, radius_m),
+        ]
+        if category is not None:
+            filters.append(Vehicle.category == category)
+        if excluded_driver_ids:
+            filters.append(DriverProfile.id.not_in(excluded_driver_ids))
         result = await self.session.execute(
             select(
                 DriverProfile.id.label("driver_id"),
@@ -133,13 +146,7 @@ class DriverLocationRepository:
             .join(DriverLocation, DriverLocation.driver_id == DriverProfile.id)
             .join(User, User.id == DriverProfile.user_id)
             .join(Vehicle, Vehicle.driver_id == DriverProfile.id)
-            .where(
-                DriverProfile.status == DriverStatus.AVAILABLE,
-                DriverProfile.verification_status == DriverVerificationStatus.APPROVED,
-                User.is_active.is_(True),
-                Vehicle.is_active.is_(True),
-                func.ST_DWithin(DriverLocation.location, pickup, radius_m),
-            )
+            .where(*filters)
             .order_by(distance)
             .limit(limit)
         )

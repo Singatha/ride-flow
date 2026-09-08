@@ -74,7 +74,7 @@ export function RiderDashboardPage() {
       {contextHolder}
       <Typography.Title level={1}>Where are you going?</Typography.Title>
       <Typography.Paragraph type="secondary">
-        Phase 4 uses direct coordinates. Address search and routing providers can plug into this contract later.
+        Direct coordinates drive proximity matching today. Address search and routing providers can plug into this contract later.
       </Typography.Paragraph>
       <Row gutter={[20, 20]}>
         <Col xs={24} lg={14}>

@@ -76,27 +76,30 @@ Requires `RIDER`. Accepts pickup and destination coordinates plus `STANDARD`, `P
 }
 ```
 
-Returns PostGIS distance, estimated duration, a database-priced fare and currency, and the compatible `AVAILABLE` driver count within 5 km. Distance is straight-line in Phase 4; a routing provider can later implement the same estimate boundary.
+Returns PostGIS distance, estimated duration, a database-priced fare and currency, and the compatible `AVAILABLE` driver count within 5 km. Distance is straight-line in Phase 5; a routing provider can later implement the same estimate boundary.
 
 ### Ride operations
 
-- `POST /api/v1/rides` requires `RIDER`, recalculates the estimate, creates the ride, and moves it from `REQUESTED` to `SEARCHING`.
+- `POST /api/v1/rides` requires `RIDER`, recalculates the estimate, creates the ride, moves it from `REQUESTED` to `SEARCHING`, and starts proximity matching.
 - `GET /api/v1/rides` returns the authenticated rider's or driver's ride history.
 - `GET /api/v1/rides/{ride_id}` returns a participant's ride; administrators may inspect any ride.
-- `GET /api/v1/rides/available` requires an `AVAILABLE` driver and returns open rides compatible with their active vehicle category. This manual queue is replaced by targeted offers in Phase 5.
-- `POST /api/v1/rides/{ride_id}/accept` atomically assigns an `AVAILABLE`, compatible driver and their active vehicle, then changes their state to `RESERVED`.
+- `GET /api/v1/rides/offers/current` requires `DRIVER` and returns that driver's single active targeted offer or `null`. The offer includes pickup distance and its response deadline.
+- `POST /api/v1/rides/{ride_id}/accept` accepts only an active offer targeted to that driver. It atomically assigns the compatible driver and active vehicle, then changes the driver to `RESERVED`.
+- `POST /api/v1/rides/{ride_id}/reject` declines the targeted offer, records the outcome, releases the driver, and immediately tries the next-nearest eligible driver. It returns 204.
 - `POST /api/v1/rides/{ride_id}/arriving` moves the assigned ride to `DRIVER_ARRIVING`.
 - `POST /api/v1/rides/{ride_id}/arrive` moves it to `DRIVER_ARRIVED`.
 - `POST /api/v1/rides/{ride_id}/start` moves it to `IN_PROGRESS` and the driver to `ON_TRIP`.
 - `POST /api/v1/rides/{ride_id}/complete` moves it to `COMPLETED`, records the Phase 4 final fare, and returns the driver to `AVAILABLE`.
 - `POST /api/v1/rides/{ride_id}/cancel` allows the owning rider to cancel before the trip starts and releases an assigned driver.
 
-Ride responses include assigned driver and vehicle details after acceptance. There is deliberately no generic status-update endpoint. Invalid or repeated transitions return `INVALID_RIDE_TRANSITION`; competing acceptance returns `RIDE_ALREADY_ACCEPTED`. One rider and one driver can each participate in at most one non-terminal ride.
+Offers expire after the configured response window. The matching worker records `TIMED_OUT`, releases the driver claim, and advances to the next-nearest driver. Previously rejected or timed-out drivers are not offered the same ride again. Ride responses include assigned driver and vehicle details after acceptance. There is deliberately no generic status-update endpoint.
+
+Invalid or repeated transitions return `INVALID_RIDE_TRANSITION`. Missing, expired, or already-processed offers return `RIDE_OFFER_NOT_FOUND`; an offer targeted to another driver returns `RIDE_ACCESS_DENIED`. One rider and one driver can each participate in at most one non-terminal ride.
 
 ## Health
 
 - `GET /health` is a dependency-free liveness probe.
-- `GET /ready` verifies PostgreSQL and returns 503 when unavailable.
+- `GET /ready` verifies PostgreSQL and Redis and returns 503 when either required dependency is unavailable.
 
 ## Error contract
 

@@ -107,3 +107,13 @@ class ActiveRideExists(ApplicationError):
 class RideAccessDenied(ApplicationError):
     code = "RIDE_ACCESS_DENIED"
     status_code = 403
+
+
+class RideOfferNotFound(ApplicationError):
+    code = "RIDE_OFFER_NOT_FOUND"
+    status_code = 409
+
+
+class MatchingUnavailable(ApplicationError):
+    code = "MATCHING_UNAVAILABLE"
+    status_code = 503

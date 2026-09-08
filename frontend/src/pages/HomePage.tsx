@@ -12,7 +12,7 @@ export function HomePage() {
   return (
     <main>
       <section className="hero">
-        <Tag color="cyan" icon={<DeploymentUnitOutlined />}>Phase 4 · Ride lifecycle</Tag>
+        <Tag color="cyan" icon={<DeploymentUnitOutlined />}>Phase 5 · Driver matching</Tag>
         <Title className="hero-title">Movement, thoughtfully engineered.</Title>
         <Paragraph className="hero-copy">
           RideFlow is a production-minded ride-sharing platform built one reliable domain at a time.
@@ -32,7 +32,7 @@ export function HomePage() {
                 showIcon
                 icon={<CheckCircleFilled />}
                 message="API online"
-                description="Ride estimates, requests, assignment, trip transitions, and history are online."
+                description="Proximity-ranked offers, driver reservation, trip transitions, and history are online."
               />
             )}
             {health.isError && (
@@ -48,7 +48,7 @@ export function HomePage() {
         <Col xs={24} md={12}>
           <Card title="Foundation boundaries" bordered={false}>
             <Space wrap>
-              <Tag>FastAPI</Tag><Tag>PostgreSQL</Tag><Tag>PostGIS</Tag>
+              <Tag>FastAPI</Tag><Tag>PostgreSQL</Tag><Tag>PostGIS</Tag><Tag>Redis</Tag>
               <Tag>React</Tag><Tag>TypeScript</Tag><Tag>Ant Design</Tag>
             </Space>
             <Paragraph className="card-copy">

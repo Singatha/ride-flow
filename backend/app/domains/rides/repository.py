@@ -57,14 +57,14 @@ class RideRepository:
         statement = self._located_statement().where(Ride.driver_id == driver_id)
         return await self._located_results(statement.order_by(Ride.requested_at.desc()))
 
-    async def list_searching(self, ride_type: RideType, *, limit: int = 25) -> list[LocatedRide]:
-        statement = (
-            self._located_statement()
-            .where(Ride.status == RideStatus.SEARCHING, Ride.ride_type == ride_type)
+    async def list_searching_ids(self, *, limit: int = 100) -> list[uuid.UUID]:
+        result = await self.session.execute(
+            select(Ride.id)
+            .where(Ride.status == RideStatus.SEARCHING)
             .order_by(Ride.requested_at)
             .limit(limit)
         )
-        return await self._located_results(statement)
+        return list(result.scalars().all())
 
     async def locate(self, ride_id: uuid.UUID) -> LocatedRide:
         result = await self._located_results(self._located_statement().where(Ride.id == ride_id))

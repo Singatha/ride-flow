@@ -14,13 +14,15 @@ flowchart TB
     subgraph Backend[FastAPI modular monolith]
         Routes[Thin HTTP routes]
         Services[Application services]
-        Domains[Auth, user, driver, and ride rules]
+        Domains[Auth, user, driver, ride, and matching rules]
         Persistence[SQLAlchemy repositories]
         Routes --> Services --> Domains
         Services --> Persistence
     end
     Query --> Routes
     Persistence --> PG[(PostgreSQL + PostGIS)]
+    Services --> Redis[(Redis coordination)]
+    Worker[Matching worker] --> Services
 ```
 
 ## Repository boundaries
@@ -33,17 +35,16 @@ flowchart TB
 - `frontend/src/app`: composition, providers, and routing
 - `frontend/src/pages` and `components`: presentation
 
-The `users`, `auth`, `drivers`, and `rides` domains demonstrate the module pattern: HTTP routes parse and serialize, services own transactions, repositories own queries, and models/schemas define persistence and contracts. Later domains should follow this boundary without adding abstraction that has no concrete use.
+The `users`, `auth`, `drivers`, `rides`, and `matching` domains demonstrate the module pattern: HTTP routes parse and serialize, services own transactions, repositories own queries, and models/schemas define persistence and contracts. Later domains should follow this boundary without adding abstraction that has no concrete use.
 
 ## Runtime and health semantics
 
-`GET /health` is a liveness probe and performs no dependency I/O. `GET /ready` executes a minimal database query and returns 503 when PostgreSQL is unavailable. This distinction prevents a database incident from causing an orchestrator to endlessly restart an otherwise healthy API process.
+`GET /health` is a liveness probe and performs no dependency I/O. `GET /ready` executes a minimal database query and Redis ping, returning 503 when either required dependency is unavailable. This distinction prevents a dependency incident from causing an orchestrator to endlessly restart an otherwise healthy API process.
 
 The API uses an async engine with connection pre-ping. Sessions are request-scoped and do not auto-commit; future services must make transaction boundaries explicit.
 
 ## Deferred infrastructure
 
-- Redis arrives with matching, where atomic driver reservations and short-lived location data provide a concrete reason for it.
 - WebSockets arrive with real-time tracking and will call application services rather than contain business rules.
 - Kafka arrives after core workflows work synchronously. Event envelopes, idempotent consumers, and eventually an outbox will be implemented together.
 - Metrics and tracing arrive in the observability phase after meaningful workflows exist to instrument.
@@ -92,7 +93,7 @@ The API exchanges coordinates as latitude and longitude. Persistence constructs 
 
 Vehicle activation and availability changes lock the driver-profile row, serializing competing changes for one driver. A partial unique index is the final safeguard that only one vehicle can be active. Location publication uses PostgreSQL `ON CONFLICT DO UPDATE`, so the single current-location row is replaced atomically.
 
-The nearby-driver repository is intentionally internal until Phase 5 supplies ride matching and driver reservation. PostgreSQL remains the source of truth; Redis is not introduced merely as a second location store.
+The nearby-driver repository supplies matching candidates through an indexed `ST_DWithin` filter and `ST_Distance` ordering. Vehicle category and driver availability are applied inside the query. PostgreSQL remains authoritative for location; Redis is not a second location store.
 
 ## Ride lifecycle
 
@@ -116,4 +117,33 @@ The entity exposes explicit operations for this graph. Routes cannot write arbit
 
 Acceptance locks the ride row before the driver row. Competing drivers therefore observe the first committed assignment and only one can succeed. Partial unique indexes provide an independent final guard against multiple active rides for a rider or driver. All ride operations use this same lock ordering to limit deadlock risk.
 
-Phase 4 uses a compatible-ride queue and five-second UI polling. Phase 5 replaces this with proximity-ranked offers and timeout/rejection handling; Phase 6 replaces active-ride polling with WebSocket updates.
+Phase 5 uses targeted offers and short HTTP polling. Phase 6 replaces offer and active-ride polling with WebSocket updates.
+
+## Driver matching
+
+```mermaid
+sequenceDiagram
+    participant R as Rider
+    participant A as API
+    participant P as PostgreSQL/PostGIS
+    participant C as Redis
+    participant D as Driver
+    participant W as Matching worker
+    R->>A: request ride
+    A->>P: create SEARCHING ride
+    A->>C: acquire per-ride matching lock
+    A->>P: nearest compatible untried drivers
+    A->>C: atomically claim ride + driver, schedule deadline
+    A->>P: persist OFFERED attempt
+    D->>A: accept or reject targeted offer
+    A->>P: lock rows and record outcome
+    A->>C: release ephemeral claim
+    W->>C: read due deadlines
+    W->>P: record TIMED_OUT and select next driver
+```
+
+PostgreSQL is the durable source of truth. `ride_match_attempts` records each targeted driver and the terminal offer outcome, which prevents re-offering the same ride-driver pair. Partial unique indexes allow only one `OFFERED` attempt per ride and per driver. Final acceptance locks the ride and driver rows before assigning the vehicle and changing the driver to `RESERVED`.
+
+Redis stores `ride:{id}:offer`, `driver:{id}:offer`, a sorted deadline set, and short per-ride matching locks. A Lua script creates the ride offer and driver claim together, so concurrent matchers cannot target one driver twice. These keys are deliberately non-durable: after Redis state loss, the worker reads `SEARCHING` rides and restores their still-valid PostgreSQL offer. Expired offers become `TIMED_OUT`; stale ephemeral keys without a corresponding durable attempt are discarded.
+
+The worker also revisits unmatched `SEARCHING` rides, allowing newly available drivers and transient Redis outages to recover without changing ride state. Offer duration, state retention, lock duration, and worker interval are configuration values. Notifications and WebSockets remain Phase 6 concerns.

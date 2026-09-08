@@ -132,3 +132,10 @@ class RideResponse(BaseModel):
             created_at=ride.created_at,
             updated_at=ride.updated_at,
         )
+
+
+class RideOfferResponse(BaseModel):
+    ride: RideResponse
+    distance_m: Decimal
+    offered_at: datetime
+    expires_at: datetime
